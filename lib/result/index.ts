@@ -1,4 +1,4 @@
-﻿import { ComparisonInsight, DealVerdict, MarketConfidence, RiskLevel, SimulationResult } from "@/types";
+import { ComparisonInsight, DealVerdict, EstimateQuality, MarketConfidence, RiskLevel, SimulationResult } from "@/types";
 
 export function getComparisonConfidenceLabel(confidence: MarketConfidence): string {
   switch (confidence) {
@@ -44,7 +44,21 @@ export function buildComparisonInsight(totalCost: number, marketEstimate: Simula
   };
 }
 
-export function computeDealSummary(result: Pick<SimulationResult, "verdict" | "comparison" | "risk" | "market" | "warnings">) {
+export function computeDealSummary(result: Pick<SimulationResult, "verdict" | "comparison" | "risk" | "market" | "warnings"> & { estimateQuality?: EstimateQuality }) {
+  if (result.estimateQuality?.confidence === "incomplete") {
+    const missing = result.estimateQuality.criticalMissingFields.map((field) => field.replace(/([A-Z])/g, " $1").toLowerCase()).join(", ");
+    return {
+      headline: "This estimate is incomplete.",
+      explanation: result.estimateQuality.summary,
+      verdictReason: `Complete ${missing} before trusting the final verdict. The current cost is provisional.`,
+      whyVerdict: [
+        result.estimateQuality.summary,
+        result.estimateQuality.nextAction,
+        `Current market source: ${result.market.providerLabel}.`,
+        ...(result.warnings.length > 0 ? [`Primary uncertainty: ${result.warnings[0]}.`] : [])
+      ]
+    };
+  }
   const riskFragment =
     result.risk.level === "LOW"
       ? "execution risk stays controlled"
@@ -83,7 +97,7 @@ export function computeDealSummary(result: Pick<SimulationResult, "verdict" | "c
   };
 }
 
-export function buildResultNarrative(result: Pick<SimulationResult, "verdict" | "comparison" | "risk" | "market" | "warnings">) {
+export function buildResultNarrative(result: Pick<SimulationResult, "verdict" | "comparison" | "risk" | "market" | "warnings"> & { estimateQuality?: EstimateQuality }) {
   return computeDealSummary(result);
 }
 

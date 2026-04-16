@@ -1,4 +1,4 @@
-﻿import {
+import {
   FIELD_LABELS,
   KNOWN_BRANDS,
   PARSER_RECOMMENDED_FIELDS,
@@ -222,28 +222,31 @@ function buildParserResult(
   normalizedUrl: string,
   assumptions: string[]
 ): UrlParseResult {
-  const extractedFields: Array<Exclude<VehicleFieldKey, "countryOfOrigin">> = Object.entries(partialInput)
+  const extractedFields: VehicleFieldKey[] = Object.entries(partialInput)
     .filter(([, value]) => hasValue(value))
-    .map(([field]) => field as VehicleFieldKey)
-    .filter((field): field is Exclude<VehicleFieldKey, "countryOfOrigin"> => field !== "countryOfOrigin");
+    .map(([field]) => field as VehicleFieldKey);
 
   const missingFields = PARSER_REQUIRED_FIELDS.filter((field) => !hasValue(partialInput[field]));
   const recommendedFields = PARSER_RECOMMENDED_FIELDS.filter((field) => !hasValue(partialInput[field]));
-  const coreFields: Array<Exclude<VehicleFieldKey, "countryOfOrigin">> = ["purchasePrice", "brand", "model", "year", "mileage"];
-  const coreFieldCount = coreFields.filter((field) => extractedFields.includes(field)).length;
+  const reliableCoreFields: VehicleFieldKey[] = ["purchasePrice", "brand", "model", "year", "firstRegistrationDate", "mileage", "horsepower"];
+  const reliableCoreCount = reliableCoreFields.filter((field) => extractedFields.includes(field)).length;
+  const hasIdentity = extractedFields.includes("brand") && extractedFields.includes("model");
+  const hasPrice = extractedFields.includes("purchasePrice");
   const status =
-    extractedFields.length === 0
-      ? "failed"
-      : coreFieldCount >= 4 && extractedFields.includes("purchasePrice") && extractedFields.includes("brand") && extractedFields.includes("model")
+    source === "url_tokens"
+      ? "insufficient"
+      : missingFields.length === 0
         ? "success"
-        : "partial";
+        : hasIdentity && hasPrice && reliableCoreCount >= 4
+          ? "partial"
+          : "insufficient";
 
   const summary =
     status === "success"
-      ? `Parsed a usable ${platform} listing. Only complete the highlighted gaps before simulating.`
+      ? `Imported a usable ${platform} listing. Review trust-critical fields before relying on the verdict.`
       : status === "partial"
-        ? `Parsed part of the ${platform} listing. Complete the missing fields to finish the decision.`
-        : `Could not reliably extract data from ${platform}. Use the manual form to continue.`;
+        ? `Imported reliable values from ${platform}, but highlighted fields still need confirmation.`
+        : `Supported ${platform} URL, but not enough reliable data was found. Complete the form manually.`;
 
   return {
     status,
@@ -319,12 +322,16 @@ export function buildFailedResult(rawUrl: string, summary: string, assumptions: 
 
 export function getParserStatusMessage(result: UrlParseResult): string {
   if (result.status === "success") {
-    return `${result.platform} parsed. Review the extracted fields, then run the decision.`;
+    return `${result.platform} parsed. Review the trust-critical fields, then run the decision.`;
   }
 
   if (result.status === "partial") {
     const missingLabel = result.missingFields.slice(0, 3).map((field) => FIELD_LABELS[field]).join(", ");
     return `${result.platform} partially parsed. Complete ${missingLabel || "the missing fields"}.`;
+  }
+
+  if (result.status === "insufficient") {
+    return "Supported source, but the listing did not expose enough reliable data. Complete the highlighted fields.";
   }
 
   if (result.status === "unsupported") {

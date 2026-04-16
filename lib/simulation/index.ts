@@ -1,9 +1,10 @@
-﻿import { generateChecklist } from "@/lib/checklist";
+import { generateChecklist } from "@/lib/checklist";
 import { computeTotalCost } from "@/lib/cost";
+import { assessEstimateQuality } from "@/lib/estimation/quality";
 import { estimateFrenchMarketValue } from "@/lib/market";
 import { buildComparisonInsight, buildResultNarrative, computeDealVerdict } from "@/lib/result";
 import { assessRisk } from "@/lib/risk";
-import { ListingPlatform, SimulationContext, SimulationResult, UrlParseResult, VehicleInput } from "@/types";
+import { DealVerdict, ListingPlatform, SimulationContext, SimulationResult, UrlParseResult, VehicleInput } from "@/types";
 
 function dedupe(items: string[]): string[] {
   return Array.from(new Set(items.filter(Boolean)));
@@ -11,6 +12,11 @@ function dedupe(items: string[]): string[] {
 
 function buildTitle(input: VehicleInput): string {
   return [input.brand, input.model, input.trim].filter(Boolean).join(" ");
+}
+
+function avoidOverconfidentVerdict(rawVerdict: DealVerdict, isComplete: boolean): DealVerdict {
+  if (isComplete || rawVerdict === "BAD DEAL") return rawVerdict;
+  return "FAIR DEAL";
 }
 
 export function runSimulation(
@@ -26,10 +32,18 @@ export function runSimulation(
   const checklist = generateChecklist(input, context);
   const profitOrLoss = comparison.estimatedSpread;
   const marginPercent = comparison.marginPercent;
-  const verdict = computeDealVerdict(profitOrLoss, marginPercent, risk.level);
+  const estimateQuality = assessEstimateQuality({
+    input,
+    parseResult,
+    evidence: context?.inputEvidence,
+    marketConfidence: market.confidence
+  });
+  const rawVerdict = computeDealVerdict(profitOrLoss, marginPercent, risk.level);
+  const verdict = avoidOverconfidentVerdict(rawVerdict, estimateQuality.isComplete);
   const generatedAt = new Date().toISOString();
 
   const warnings = dedupe([
+    ...(estimateQuality.isComplete ? [] : [estimateQuality.summary]),
     ...(parseResult?.assumptions ?? []),
     ...breakdown.assumptions,
     ...(market.confidence === "low" ? [market.explanation] : [])
@@ -40,7 +54,8 @@ export function runSimulation(
     comparison,
     risk,
     market,
-    warnings
+    warnings,
+    estimateQuality
   });
 
   return {
@@ -60,7 +75,7 @@ export function runSimulation(
     profitOrLoss,
     marginPercent,
     warnings,
+    estimateQuality,
     generatedAt
   };
 }
-

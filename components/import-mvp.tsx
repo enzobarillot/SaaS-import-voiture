@@ -24,6 +24,7 @@ import {
   type SampleScenario
 } from "@/lib/reference-data";
 import { detectPlatform, getParserStatusMessage, parseListingUrl } from "@/lib/parser";
+import { assessEstimateQuality } from "@/lib/estimation/quality";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { trackEvent } from "@/lib/analytics/client";
 import { getProductAccess } from "@/lib/product/access";
@@ -31,6 +32,7 @@ import { clearHistory, loadHistory, pushHistory } from "@/lib/storage/history";
 import { runSimulation } from "@/lib/simulation";
 import { consumeSimulationCredit, getUsageState } from "@/lib/usage";
 import type {
+  InputEvidence,
   InputMode,
   ParserStatus,
   ReportDocument,
@@ -88,7 +90,7 @@ function normalizeInput(current: VehicleInput, listingUrl: string): VehicleInput
 
 function parserClasses(status: ParserStatus) {
   if (status === "success") return "border-emerald-200 bg-emerald-50 text-emerald-900";
-  if (status === "partial") return "border-amber-200 bg-amber-50 text-amber-900";
+  if (status === "partial" || status === "insufficient") return "border-amber-200 bg-amber-50 text-amber-900";
   return "border-rose-200 bg-rose-50 text-rose-900";
 }
 
@@ -108,14 +110,27 @@ function defaultSessionEnvelope(): SessionEnvelope {
   };
 }
 
+function getFilledInputFields(input: VehicleInput): VehicleFieldKey[] {
+  return (Object.keys(input) as VehicleFieldKey[]).filter((field) => valueExists(input[field]));
+}
+
+function formatFieldList(fields: VehicleFieldKey[]): string {
+  return fields.map((field) => FIELD_LABELS[field]).join(", ");
+}
+
+function getInferredFields(parserResult: UrlParseResult | null): VehicleFieldKey[] {
+  return parserResult?.partialInput.countryOfOrigin ? ["countryOfOrigin"] : [];
+}
+
 export function ImportMvp() {
   const [mode, setMode] = useState<InputMode>("url");
   const [input, setInput] = useState<VehicleInput>(EMPTY_VEHICLE_INPUT);
   const [listingUrl, setListingUrl] = useState("");
-  const [status, setStatus] = useState("Paste a listing URL, choose a sample vehicle, or complete the core fields to get a France import decision.");
+  const [status, setStatus] = useState("Paste a listing URL or complete the fields needed for a reliable France import estimate.");
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [history, setHistory] = useState<SimulationResult[]>([]);
   const [parserResult, setParserResult] = useState<UrlParseResult | null>(null);
+  const [userSuppliedFields, setUserSuppliedFields] = useState<VehicleFieldKey[]>([]);
   const [validationErrors, setValidationErrors] = useState<VehicleFieldKey[]>([]);
   const [usage, setUsage] = useState<UsageState>(() => getUsageState());
   const [isParsing, setIsParsing] = useState(false);
@@ -255,7 +270,7 @@ export function ImportMvp() {
       return;
     }
 
-    if (parsed.status === "partial") {
+    if (parsed.status === "partial" || parsed.status === "insufficient") {
       void trackEvent(ANALYTICS_EVENTS.urlParsePartial, payload);
       return;
     }
@@ -268,20 +283,40 @@ export function ImportMvp() {
   };
   const parserMissing = parserResult?.missingFields ?? [];
   const parserRecommended = parserResult?.recommendedFields ?? [];
+  const inputEvidence: InputEvidence = {
+    userSuppliedFields,
+    extractedFields: parserResult?.extractedFields ?? [],
+    inferredFields: getInferredFields(parserResult)
+  };
+  const currentEstimateQuality = assessEstimateQuality({
+    input,
+    parseResult: parserResult ?? undefined,
+    evidence: inputEvidence
+  });
+  const criticalMissingFields = currentEstimateQuality.criticalMissingFields;
+  const advancedCriticalFields: VehicleFieldKey[] = ["co2Emissions", "curbWeightKg", "sellerType", "vatStatus", "transportCost"];
+  const hasAdvancedCriticalMissing = criticalMissingFields.some((field) => advancedCriticalFields.includes(field));
   const visibleWarnings = result ? result.warnings : parserResult?.assumptions ?? [];
   const isAnonymousLocked = !sessionEnvelope.session && usage.locked;
 
+  const markUserSuppliedField = (field: VehicleFieldKey) => {
+    setUserSuppliedFields((current) => (current.includes(field) ? current : [...current, field]));
+  };
+
   const updateText = <K extends keyof VehicleInput>(key: K, value: VehicleInput[K]) => {
+    markUserSuppliedField(key as VehicleFieldKey);
     setInput((current) => ({ ...current, [key]: value }));
   };
 
   const updateNumber = <K extends keyof VehicleInput>(key: K, value: string) => {
+    markUserSuppliedField(key as VehicleFieldKey);
     const numericValue = value === "" ? 0 : Number(value);
     setInput((current) => ({ ...current, [key]: Number.isNaN(numericValue) ? 0 : numericValue }));
   };
 
   const getFieldState = (field: VehicleFieldKey): { state: FieldState; stateLabel?: string } => {
     if (validationErrors.includes(field)) return { state: "error", stateLabel: "required" };
+    if (criticalMissingFields.includes(field)) return { state: "missing", stateLabel: "critical" };
     if (parserMissing.includes(field)) return { state: "missing", stateLabel: "complete" };
     if (parserRecommended.includes(field)) return { state: "recommended", stateLabel: "review" };
     return { state: "default" };
@@ -350,7 +385,7 @@ export function ImportMvp() {
 
     setIsRunning(true);
     try {
-      const simulation = runSimulation(normalizedInput, detectPlatform(listingUrl), parserResult ?? undefined);
+      const simulation = runSimulation(normalizedInput, detectPlatform(listingUrl), parserResult ?? undefined, { inputEvidence });
       setResult(simulation);
       void trackEvent(ANALYTICS_EVENTS.simulationCompleted, {
         resultId: simulation.id,
@@ -364,7 +399,7 @@ export function ImportMvp() {
       if (!sessionEnvelope.session) {
         setUsage(consumeSimulationCredit());
       }
-      setStatus("Decision ready. Review landed cost, market gap, and risk.");
+      setStatus(simulation.estimateQuality?.isComplete ? "Reliable estimate ready. Review landed cost, market gap, and risk." : `Incomplete estimate. Confirm ${formatFieldList(simulation.estimateQuality?.criticalMissingFields ?? [])} before trusting the verdict.`);
       setCloudMessage(undefined);
     } finally {
       setIsRunning(false);
@@ -379,6 +414,7 @@ export function ImportMvp() {
     setResult(null);
     setSavedReport(null);
     setValidationErrors([]);
+    setUserSuppliedFields(getFilledInputFields(scenario.input));
     setStatus(`${scenario.label} loaded. Review the prefilled assumptions, then compute the import decision.`);
     scrollToTry();
     void trackEvent(ANALYTICS_EVENTS.sampleScenarioUsed, {
@@ -399,6 +435,7 @@ export function ImportMvp() {
     setResult(null);
     setSavedReport(null);
     setValidationErrors([]);
+    setUserSuppliedFields([]);
     setStatus("Form reset. Paste a listing or complete the core fields to continue.");
   };
 
@@ -572,6 +609,7 @@ export function ImportMvp() {
       setInput(document.simulation.input);
       setListingUrl(document.simulation.input.listingUrl ?? "");
       setParserResult(null);
+      setUserSuppliedFields(getFilledInputFields(document.simulation.input));
       setStatus("Cloud report loaded into the app.");
     } catch {
       setCloudMessage("Unable to load the saved report.");
@@ -607,6 +645,20 @@ export function ImportMvp() {
               </span>
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-500">{status}</p>
+            {!currentEstimateQuality.isComplete ? (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                <p className="font-semibold">Reliable verdict locked</p>
+                <p className="mt-1 text-amber-800">{currentEstimateQuality.nextAction}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {criticalMissingFields.slice(0, 6).map((field) => <span key={field} className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-amber-900">{FIELD_LABELS[field]}</span>)}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <span className="font-semibold">{currentEstimateQuality.label}</span>
+                <span className="ml-2 text-emerald-700">Critical fields are present.</span>
+              </div>
+            )}
 
             <div className="mt-5 inline-flex rounded-full bg-slate-100 p-1">
               <button type="button" onClick={() => setMode("url")} className={`rounded-full px-4 py-2 text-sm font-medium ${mode === "url" ? "bg-white text-ink shadow" : "text-slate-500"}`}>URL</button>
@@ -629,6 +681,10 @@ export function ImportMvp() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-semibold">{parserResult.summary}</span>
                       <span className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">{parserResult.status}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      {parserResult.extractedFields.length > 0 ? <span className="rounded-full bg-white/70 px-2.5 py-1 font-semibold">Imported {parserResult.extractedFields.length}</span> : null}
+                      {criticalMissingFields.length > 0 ? <span className="rounded-full bg-white/70 px-2.5 py-1 font-semibold">Still needed {criticalMissingFields.length}</span> : <span className="rounded-full bg-white/70 px-2.5 py-1 font-semibold">Critical fields ready</span>}
                     </div>
                     <details className="mt-3">
                       <summary className="cursor-pointer list-none text-sm font-semibold">Parser details</summary>
@@ -687,7 +743,7 @@ export function ImportMvp() {
                 </Field>
               </div>
 
-              <details className="mt-5 border-t border-slate-100 pt-4">
+              <details open={hasAdvancedCriticalMissing} className="mt-5 border-t border-slate-100 pt-4">
                 <summary className="cursor-pointer list-none text-sm font-semibold text-ink">Advanced assumptions</summary>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <Field label="Trim" {...getFieldState("trim")}>

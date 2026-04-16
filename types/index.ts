@@ -14,12 +14,14 @@ export type VatStatus = "included" | "excluded" | "recoverable";
 export type ListingPlatform = "mobile.de" | "autoscout24" | "leboncoin" | "lacentrale" | "unknown";
 export type DealVerdict = "GOOD DEAL" | "FAIR DEAL" | "BAD DEAL";
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
-export type ParserStatus = "success" | "partial" | "unsupported" | "failed";
+export type ParserStatus = "success" | "partial" | "insufficient" | "unsupported" | "failed";
 export type ParserSource = "url_tokens" | "html_metadata" | "json_ld" | "mixed" | "none";
 export type MarketSource = "manual" | "seeded" | "provider" | "heuristic";
 export type MarketProviderId = "manual" | "mock_live_feed" | "seeded_reference" | "heuristic" | "future_api";
 export type MarketProviderKind = "manual" | "mock_live" | "seeded" | "heuristic" | "future_api";
 export type MarketConfidence = "high" | "medium" | "low";
+export type EstimateConfidence = "high" | "medium" | "low" | "incomplete";
+export type EstimateValueStatus = "confirmed" | "user_entered" | "estimated" | "missing";
 export type ComparisonDirection = "saving" | "overpay" | "break_even";
 export type PlanTier = "free" | "premium";
 export type ProductAccessLevel = "anonymous" | "signed_in_free" | "premium_placeholder";
@@ -142,6 +144,35 @@ export interface RiskAssessment {
   level: RiskLevel;
   reasons: string[];
 }
+export interface InputEvidence {
+  userSuppliedFields?: VehicleFieldKey[];
+  extractedFields?: VehicleFieldKey[];
+  inferredFields?: VehicleFieldKey[];
+}
+
+export interface EstimateAssumption {
+  field: VehicleFieldKey;
+  label: string;
+  status: EstimateValueStatus;
+  critical: boolean;
+  note: string;
+}
+
+export interface EstimateQuality {
+  confidence: EstimateConfidence;
+  label: string;
+  isComplete: boolean;
+  canShowStrongVerdict: boolean;
+  criticalMissingFields: VehicleFieldKey[];
+  missingFields: VehicleFieldKey[];
+  confirmedFields: VehicleFieldKey[];
+  userEnteredFields: VehicleFieldKey[];
+  estimatedFields: VehicleFieldKey[];
+  assumptions: EstimateAssumption[];
+  summary: string;
+  nextAction: string;
+}
+
 
 export interface ChecklistItem {
   id: string;
@@ -182,6 +213,7 @@ export interface UsageState {
 
 export interface SimulationContext {
   evaluationDate?: string | Date;
+  inputEvidence?: InputEvidence;
 }
 
 export interface SimulationResult {
@@ -201,6 +233,7 @@ export interface SimulationResult {
   profitOrLoss: number;
   marginPercent: number;
   warnings: string[];
+  estimateQuality?: EstimateQuality;
   generatedAt: string;
 }
 

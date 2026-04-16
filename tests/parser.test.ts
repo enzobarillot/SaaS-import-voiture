@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
 import { detectPlatform, parseListingHtml, parseListingUrl } from "@/lib/parser";
 
@@ -14,10 +14,10 @@ test("unknown platforms return unsupported parser results", () => {
   assert.equal(parsed.platform, "unknown");
 });
 
-test("URL token parsing extracts usable data without inventing the rest", () => {
+test("URL token parsing is marked insufficient when critical listing data is absent", () => {
   const parsed = parseListingUrl("https://www.mobile.de/fahrzeuge/details.html/bmw-320d-m-sport-2021");
 
-  assert.equal(parsed.status, "success");
+  assert.equal(parsed.status, "insufficient");
   assert.equal(parsed.partialInput.brand, "Bmw");
   assert.ok(parsed.missingFields.length > 0);
 });

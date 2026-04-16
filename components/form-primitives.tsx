@@ -1,4 +1,4 @@
-﻿import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
 export type FieldState = "default" | "error" | "missing" | "recommended";
 
@@ -47,7 +47,7 @@ export function Field({
   const tone = fieldStateTone(state);
 
   return (
-    <label className={`flex flex-col gap-2 rounded-3xl border p-4 text-sm ${tone.frame}`}>
+    <label className={`flex flex-col gap-2 rounded-2xl border p-3 text-sm ${tone.frame}`}>
       <span className={`flex items-center justify-between gap-3 font-medium ${tone.label}`}>
         <span>{label}</span>
         {stateLabel ? (
@@ -66,7 +66,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 ${
+      className={`rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 ${
         props.className ?? ""
       }`}
     />
@@ -77,7 +77,7 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 ${
+      className={`rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 ${
         props.className ?? ""
       }`}
     />

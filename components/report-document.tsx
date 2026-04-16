@@ -25,6 +25,8 @@ function formatDate(value: string): string {
 
 export function ReportDocumentView({ report, shared = false }: { report: ReportDocument; shared?: boolean }) {
   const simulation = report.simulation;
+  const quality = simulation.estimateQuality;
+  const isIncomplete = quality?.confidence === "incomplete";
 
   useEffect(() => {
     void trackEvent(ANALYTICS_EVENTS.printableReportViewed, {
@@ -43,7 +45,7 @@ export function ReportDocumentView({ report, shared = false }: { report: ReportD
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">ImportScore report</p>
               <h1 className="mt-3 text-3xl font-semibold text-ink md:text-4xl">{report.title}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-                Saved {formatDate(report.createdAt)}. {shared ? "Shared link view." : "Printable owner view."}
+                Saved {formatDate(report.createdAt)}. {shared ? "Shared link view." : "Printable owner view."} {isIncomplete ? "Estimate incomplete: confirm missing critical fields before relying on the verdict." : ""}
               </p>
             </div>
             <div className="flex flex-wrap gap-3 print:hidden">
@@ -68,8 +70,8 @@ export function ReportDocumentView({ report, shared = false }: { report: ReportD
               <p className="mt-3 text-2xl font-semibold text-ink">{formatCurrency(simulation.breakdown.total)}</p>
             </div>
             <div className="rounded-3xl bg-slate-50 p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">France market</p>
-              <p className="mt-3 text-2xl font-semibold text-ink">{formatCurrency(simulation.market.estimatedPrice)}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Confidence</p>
+              <p className={`mt-3 text-2xl font-semibold ${isIncomplete ? "text-amber-700" : "text-ink"}`}>{quality?.label ?? simulation.comparison.confidenceLabel}</p>
             </div>
             <div className="rounded-3xl bg-slate-50 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Gain / loss</p>
@@ -79,7 +81,7 @@ export function ReportDocumentView({ report, shared = false }: { report: ReportD
             </div>
             <div className="rounded-3xl bg-slate-50 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Verdict</p>
-              <p className="mt-3 text-2xl font-semibold text-ink">{simulation.verdict}</p>
+              <p className="mt-3 text-2xl font-semibold text-ink">{isIncomplete ? "INCOMPLETE" : simulation.verdict}</p>
             </div>
           </div>
         </section>
@@ -134,6 +136,7 @@ export function ReportDocumentView({ report, shared = false }: { report: ReportD
 
             <div className="rounded-[2rem] border border-white/70 bg-white p-6 shadow-soft print:shadow-none">
               <h2 className="text-lg font-semibold text-ink">Assumptions and checklist</h2>
+              {quality ? <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">{quality.summary} {quality.nextAction}</p> : null}
               <div className="mt-4 space-y-2 text-sm text-slate-600">
                 {simulation.warnings.map((warning) => (
                   <p key={warning} className="rounded-2xl bg-amber-50 px-4 py-3 text-amber-900">{warning}</p>
