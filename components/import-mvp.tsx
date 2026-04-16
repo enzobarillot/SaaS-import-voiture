@@ -217,7 +217,7 @@ export function ImportMvp() {
   };
 
   const handlePlanCta = (planId: "anonymous" | "account_free" | "premium", intent?: string) => {
-    const destination = planId === "premium" ? "#premium-request" : "#try";
+    const destination = planId === "premium" ? "#account" : "#simulator";
     handleLandingCta(`pricing_${planId}`, "pricing", destination);
 
     if (planId === "premium") {
@@ -226,12 +226,17 @@ export function ImportMvp() {
         cta: "request_pro_plan",
         intent
       });
-      document.getElementById("premium-request")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setAuthMode("signup");
+      document.getElementById("account")?.setAttribute("open", "true");
+      document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
 
     if (planId === "account_free") {
       setAuthMode("signup");
+      document.getElementById("account")?.setAttribute("open", "true");
+      document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
     }
 
     handleStartUrl();
@@ -580,272 +585,244 @@ export function ImportMvp() {
       : `${usage.remaining} of ${FREE_SIMULATION_LIMIT} free decisions left in ${usage.periodLabel}.`;
 
   return (
-    <main className="relative overflow-hidden">
+    <main id="top" className="min-h-screen bg-slate-50 text-ink">
+      <TopNav onStart={handleStartUrl} />
       <LandingSections
-        onStartUrl={handleStartUrl}
         onSubmitUrl={handleLandingUrlSubmit}
         onStartManual={handleStartManual}
-        onLoadDemo={handleLoadDemo}
         onPlanCta={handlePlanCta}
         onCta={handleLandingCta}
       />
 
-      <section className="section-grid px-6 pb-10 pt-10 md:px-10 lg:px-16">
-        <div className="mx-auto max-w-7xl">
-          <div id="simulator" className="grid gap-8 scroll-mt-24 xl:grid-cols-[0.82fr_1.18fr]">
-            <section className="glass-panel rounded-[2rem] border border-white/70 p-6 shadow-soft md:p-8">
-              <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Input system</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-ink">Run a new decision</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-600">{status}</p>
-                </div>
-                <div className="flex gap-2 rounded-full bg-slate-100 p-1">
-                  <button type="button" onClick={() => setMode("manual")} className={`rounded-full px-4 py-2 text-sm font-medium ${mode === "manual" ? "bg-white text-ink shadow" : "text-slate-500"}`}>Manual</button>
-                  <button type="button" onClick={() => setMode("url")} className={`rounded-full px-4 py-2 text-sm font-medium ${mode === "url" ? "bg-white text-ink shadow" : "text-slate-500"}`}>URL</button>
-                </div>
+      <section id="simulator" className="scroll-mt-20 px-6 py-10 md:px-10 lg:px-16">
+        <div className="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[minmax(340px,440px)_1fr]">
+          <section className="rounded-[1.5rem] bg-white p-5 shadow-soft ring-1 ring-slate-200/70 md:p-6 xl:self-start">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Simulator</p>
+                <h2 className="mt-2 text-2xl font-semibold text-ink">New decision</h2>
               </div>
-              <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-white px-5 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Access</p>
-                    <p className="mt-1 text-sm text-slate-600">{usageCaption}</p>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isAnonymousLocked ? "bg-rose-100 text-rose-900" : "bg-slate-100 text-slate-600"}`}>
+                {sessionEnvelope.session ? sessionEnvelope.access.label : isAnonymousLocked ? "Limit reached" : `${usage.remaining}/${FREE_SIMULATION_LIMIT} free`}
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-500">{status}</p>
+
+            <div className="mt-5 inline-flex rounded-full bg-slate-100 p-1">
+              <button type="button" onClick={() => setMode("url")} className={`rounded-full px-4 py-2 text-sm font-medium ${mode === "url" ? "bg-white text-ink shadow" : "text-slate-500"}`}>URL</button>
+              <button type="button" onClick={() => setMode("manual")} className={`rounded-full px-4 py-2 text-sm font-medium ${mode === "manual" ? "bg-white text-ink shadow" : "text-slate-500"}`}>Manual</button>
+            </div>
+
+            {mode === "url" ? (
+              <div className="mt-5 space-y-3">
+                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <Field label="Listing URL">
+                    <Input value={listingUrl} onChange={(event) => setListingUrl(event.target.value)} placeholder="https://www.mobile.de/..." />
+                  </Field>
+                  <button type="button" onClick={handleParseUrl} disabled={isParsing} className="self-end rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">
+                    {isParsing ? "Parsing..." : "Extract"}
+                  </button>
+                </div>
+
+                {parserResult ? (
+                  <div className={`rounded-xl px-4 py-3 text-sm ${parserClasses(parserResult.status)}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold">{parserResult.summary}</span>
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">{parserResult.status}</span>
+                    </div>
+                    <details className="mt-3">
+                      <summary className="cursor-pointer list-none text-sm font-semibold">Parser details</summary>
+                      <div className="mt-3 grid gap-3 text-xs md:grid-cols-3">
+                        <p><span className="block font-semibold uppercase opacity-70">Extracted</span>{parserResult.extractedFields.length > 0 ? parserResult.extractedFields.map((field) => FIELD_LABELS[field]).join(", ") : "None yet"}</p>
+                        <p><span className="block font-semibold uppercase opacity-70">Complete</span>{parserResult.missingFields.length > 0 ? parserResult.missingFields.map((field) => FIELD_LABELS[field]).join(", ") : "Core fields ok"}</p>
+                        <p><span className="block font-semibold uppercase opacity-70">Review</span>{parserResult.recommendedFields.length > 0 ? parserResult.recommendedFields.map((field) => FIELD_LABELS[field]).join(", ") : "No flags"}</p>
+                      </div>
+                    </details>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${isAnonymousLocked ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{sessionEnvelope.session ? "Account" : isAnonymousLocked ? "Limit reached" : "Free"}</span>
-                </div>
+                ) : null}
               </div>
-              <details className="mt-6 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-soft">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-ink">
-                  Try a sample vehicle
-                  <span className="ml-2 text-slate-400">or paste your own listing below</span>
-                </summary>
-                <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                  {SAMPLE_SCENARIOS.map((scenario) => (
-                    <button
-                      key={scenario.id}
-                      type="button"
-                      onClick={() => handleLoadSample(scenario)}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:border-orange-300 hover:bg-orange-50"
-                    >
-                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{scenario.badge}</span>
-                      <span className="mt-2 block text-base font-semibold text-ink">{scenario.label}</span>
-                      <span className="mt-2 block text-sm leading-6 text-slate-600">{scenario.description}</span>
-                    </button>
-                  ))}
+            ) : null}
+
+            <details open={mode === "manual" || Boolean(parserResult)} className="mt-5 border-t border-slate-200 pt-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-ink">
+                Vehicle details
+                <span className="text-xs font-normal text-slate-400">required</span>
+              </summary>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <Field label="Purchase price (EUR)" {...getFieldState("purchasePrice")}>
+                  <Input type="number" value={input.purchasePrice || ""} onChange={(event) => updateNumber("purchasePrice", event.target.value)} />
+                </Field>
+                <Field label="Country of origin" {...getFieldState("countryOfOrigin")}>
+                  <Select value={input.countryOfOrigin} onChange={(event) => updateText("countryOfOrigin", event.target.value as VehicleInput["countryOfOrigin"])}>
+                    {COUNTRY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Brand" {...getFieldState("brand")}>
+                  <Input value={input.brand} onChange={(event) => updateText("brand", event.target.value)} />
+                </Field>
+                <Field label="Model" {...getFieldState("model")}>
+                  <Input value={input.model} onChange={(event) => updateText("model", event.target.value)} />
+                </Field>
+                <Field label="Year" {...getFieldState("year")}>
+                  <Input type="number" value={input.year || ""} onChange={(event) => updateNumber("year", event.target.value)} />
+                </Field>
+                <Field label="First registration" {...getFieldState("firstRegistrationDate")}>
+                  <Input type="date" value={input.firstRegistrationDate} onChange={(event) => updateText("firstRegistrationDate", event.target.value)} />
+                </Field>
+                <Field label="Mileage (km)" {...getFieldState("mileage")}>
+                  <Input type="number" value={input.mileage || ""} onChange={(event) => updateNumber("mileage", event.target.value)} />
+                </Field>
+                <Field label="Horsepower (hp)" {...getFieldState("horsepower")}>
+                  <Input type="number" value={input.horsepower || ""} onChange={(event) => updateNumber("horsepower", event.target.value)} />
+                </Field>
+                <Field label="Fuel type" {...getFieldState("fuelType")}>
+                  <Select value={input.fuelType} onChange={(event) => updateText("fuelType", event.target.value as VehicleInput["fuelType"])}>
+                    {FUEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Transmission" {...getFieldState("transmission")}>
+                  <Select value={input.transmission} onChange={(event) => updateText("transmission", event.target.value as VehicleInput["transmission"])}>
+                    {TRANSMISSION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </Select>
+                </Field>
+              </div>
+
+              <details className="mt-5 border-t border-slate-100 pt-4">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-ink">Advanced assumptions</summary>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <Field label="Trim" {...getFieldState("trim")}>
+                    <Input value={input.trim} onChange={(event) => updateText("trim", event.target.value)} />
+                  </Field>
+                  <Field label="Fiscal power (CV)" {...getFieldState("fiscalPower")}>
+                    <Input type="number" value={input.fiscalPower || ""} onChange={(event) => updateNumber("fiscalPower", event.target.value)} />
+                  </Field>
+                  <Field label="CO2 emissions (g/km)" {...getFieldState("co2Emissions")}>
+                    <Input type="number" value={input.co2Emissions || ""} onChange={(event) => updateNumber("co2Emissions", event.target.value)} />
+                  </Field>
+                  <Field label="Curb weight (kg)" {...getFieldState("curbWeightKg")}>
+                    <Input type="number" value={input.curbWeightKg || ""} onChange={(event) => updateNumber("curbWeightKg", event.target.value)} />
+                  </Field>
+                  <Field label="Seller type" {...getFieldState("sellerType")}>
+                    <Select value={input.sellerType} onChange={(event) => updateText("sellerType", event.target.value as VehicleInput["sellerType"])}>
+                      {SELLER_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </Select>
+                  </Field>
+                  <Field label="VAT status" {...getFieldState("vatStatus")}>
+                    <Select value={input.vatStatus} onChange={(event) => updateText("vatStatus", event.target.value as VehicleInput["vatStatus"])}>
+                      {VAT_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </Select>
+                  </Field>
+                  <Field label="Transport cost (EUR)" {...getFieldState("transportCost")}>
+                    <Input type="number" value={input.transportCost || ""} onChange={(event) => updateNumber("transportCost", event.target.value)} />
+                  </Field>
+                  <Field label="Export plates (EUR)" {...getFieldState("exportPlatesCost")}>
+                    <Input type="number" value={input.exportPlatesCost || ""} onChange={(event) => updateNumber("exportPlatesCost", event.target.value)} />
+                  </Field>
+                  <Field label="COC cost (EUR)" {...getFieldState("cocCost")}>
+                    <Input type="number" value={input.cocCost || ""} onChange={(event) => updateNumber("cocCost", event.target.value)} />
+                  </Field>
+                  <Field label="Inspection cost (EUR)" {...getFieldState("inspectionCost")}>
+                    <Input type="number" value={input.inspectionCost || ""} onChange={(event) => updateNumber("inspectionCost", event.target.value)} />
+                  </Field>
+                  <Field label="Broker fees (EUR)" {...getFieldState("brokerFees")}>
+                    <Input type="number" value={input.brokerFees || ""} onChange={(event) => updateNumber("brokerFees", event.target.value)} />
+                  </Field>
+                  <Field label="French market estimate (EUR)" {...getFieldState("frenchMarketEstimate")}>
+                    <Input type="number" value={input.frenchMarketEstimate || ""} onChange={(event) => updateNumber("frenchMarketEstimate", event.target.value)} />
+                  </Field>
                 </div>
               </details>
-              {mode === "url" ? (
-                <div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-soft">
-                  <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                    <Field label="Listing URL" hint="Supported in this MVP: mobile.de, AutoScout24, Leboncoin, La Centrale">
-                      <Input value={listingUrl} onChange={(event) => setListingUrl(event.target.value)} placeholder="https://www.mobile.de/..." />
-                    </Field>
-                    <button type="button" onClick={handleParseUrl} disabled={isParsing} className="self-end rounded-2xl bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">{isParsing ? "Parsing..." : "Extract listing data"}</button>
-                  </div>
 
-                  {parserResult ? (
-                    <div className={`mt-4 rounded-3xl border p-4 ${parserClasses(parserResult.status)}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] opacity-70">Parser result</p>
-                          <p className="mt-2 text-lg font-semibold">{parserResult.summary}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.15em]">
-                          <span className="rounded-full border border-current/15 bg-white/70 px-3 py-1">{parserResult.platform}</span>
-                          <span className="rounded-full border border-current/15 bg-white/70 px-3 py-1">{parserResult.status}</span>
-                          <span className="rounded-full border border-current/15 bg-white/70 px-3 py-1">{parserResult.source.replace("_", " ")}</span>
-                        </div>
-                      </div>
-                      <details className="mt-4 rounded-2xl bg-white/50 p-4">
-                        <summary className="cursor-pointer list-none text-sm font-semibold">Parser details</summary>
-                        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">Extracted</p>
-                          <div className="mt-3 flex flex-wrap gap-2">{parserResult.extractedFields.length > 0 ? parserResult.extractedFields.map((field) => <span key={field} className="rounded-full bg-white/80 px-3 py-2 text-xs font-medium text-slate-700">{FIELD_LABELS[field]}</span>) : <span className="text-sm">No reliable fields extracted yet.</span>}</div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">Complete next</p>
-                          <div className="mt-3 flex flex-wrap gap-2">{parserResult.missingFields.length > 0 ? parserResult.missingFields.map((field) => <span key={field} className="rounded-full bg-white/80 px-3 py-2 text-xs font-medium text-slate-700">{FIELD_LABELS[field]}</span>) : <span className="text-sm">Core fields look good.</span>}</div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">Recommended review</p>
-                          <div className="mt-3 flex flex-wrap gap-2">{parserResult.recommendedFields.length > 0 ? parserResult.recommendedFields.map((field) => <span key={field} className="rounded-full bg-white/80 px-3 py-2 text-xs font-medium text-slate-700">{FIELD_LABELS[field]}</span>) : <span className="text-sm">No extra review flags.</span>}</div>
-                        </div>
-                      </div>
-                      </details>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="mt-6 space-y-5">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Required inputs</p>
-                  <div className="mt-3 grid gap-4 md:grid-cols-2">
-                    <Field label="Purchase price (EUR)" {...getFieldState("purchasePrice")}>
-                      <Input type="number" value={input.purchasePrice || ""} onChange={(event) => updateNumber("purchasePrice", event.target.value)} />
-                    </Field>
-                    <Field label="Country of origin" {...getFieldState("countryOfOrigin")}>
-                      <Select value={input.countryOfOrigin} onChange={(event) => updateText("countryOfOrigin", event.target.value as VehicleInput["countryOfOrigin"])}>
-                        {COUNTRY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </Select>
-                    </Field>
-                    <Field label="Brand" {...getFieldState("brand")}>
-                      <Input value={input.brand} onChange={(event) => updateText("brand", event.target.value)} />
-                    </Field>
-                    <Field label="Model" {...getFieldState("model")}>
-                      <Input value={input.model} onChange={(event) => updateText("model", event.target.value)} />
-                    </Field>
-                    <Field label="Year" {...getFieldState("year")}>
-                      <Input type="number" value={input.year || ""} onChange={(event) => updateNumber("year", event.target.value)} />
-                    </Field>
-                    <Field label="First registration" {...getFieldState("firstRegistrationDate")}>
-                      <Input type="date" value={input.firstRegistrationDate} onChange={(event) => updateText("firstRegistrationDate", event.target.value)} />
-                    </Field>
-                    <Field label="Mileage (km)" {...getFieldState("mileage")}>
-                      <Input type="number" value={input.mileage || ""} onChange={(event) => updateNumber("mileage", event.target.value)} />
-                    </Field>
-                    <Field label="Horsepower (hp)" {...getFieldState("horsepower")}>
-                      <Input type="number" value={input.horsepower || ""} onChange={(event) => updateNumber("horsepower", event.target.value)} />
-                    </Field>
-                    <Field label="Fuel type" {...getFieldState("fuelType")}>
-                      <Select value={input.fuelType} onChange={(event) => updateText("fuelType", event.target.value as VehicleInput["fuelType"])}>
-                        {FUEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </Select>
-                    </Field>
-                    <Field label="Transmission" {...getFieldState("transmission")}>
-                      <Select value={input.transmission} onChange={(event) => updateText("transmission", event.target.value as VehicleInput["transmission"])}>
-                        {TRANSMISSION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </Select>
-                    </Field>
-                  </div>
-                </div>
-
-                <details className="rounded-[1.5rem] border border-slate-200 bg-white p-5">
-                  <summary className="cursor-pointer list-none text-sm font-semibold text-ink">
-                    Advanced assumptions
-                    <span className="ml-2 font-normal text-slate-500">tax, logistics, VAT, and market override</span>
-                  </summary>
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <Field label="Trim" {...getFieldState("trim")}>
-                      <Input value={input.trim} onChange={(event) => updateText("trim", event.target.value)} />
-                    </Field>
-                    <Field label="Fiscal power (CV)" {...getFieldState("fiscalPower")}>
-                      <Input type="number" value={input.fiscalPower || ""} onChange={(event) => updateNumber("fiscalPower", event.target.value)} />
-                    </Field>
-                    <Field label="CO2 emissions (g/km)" {...getFieldState("co2Emissions")}>
-                      <Input type="number" value={input.co2Emissions || ""} onChange={(event) => updateNumber("co2Emissions", event.target.value)} />
-                    </Field>
-                    <Field label="Curb weight (kg)" {...getFieldState("curbWeightKg")}>
-                      <Input type="number" value={input.curbWeightKg || ""} onChange={(event) => updateNumber("curbWeightKg", event.target.value)} />
-                    </Field>
-                    <Field label="Seller type" {...getFieldState("sellerType")}>
-                      <Select value={input.sellerType} onChange={(event) => updateText("sellerType", event.target.value as VehicleInput["sellerType"])}>
-                        {SELLER_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </Select>
-                    </Field>
-                    <Field label="VAT status" {...getFieldState("vatStatus")}>
-                      <Select value={input.vatStatus} onChange={(event) => updateText("vatStatus", event.target.value as VehicleInput["vatStatus"])}>
-                        {VAT_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </Select>
-                    </Field>
-                    <Field label="Transport cost (EUR)" {...getFieldState("transportCost")}>
-                      <Input type="number" value={input.transportCost || ""} onChange={(event) => updateNumber("transportCost", event.target.value)} />
-                    </Field>
-                    <Field label="Export plates (EUR)" {...getFieldState("exportPlatesCost")}>
-                      <Input type="number" value={input.exportPlatesCost || ""} onChange={(event) => updateNumber("exportPlatesCost", event.target.value)} />
-                    </Field>
-                    <Field label="COC cost (EUR)" {...getFieldState("cocCost")}>
-                      <Input type="number" value={input.cocCost || ""} onChange={(event) => updateNumber("cocCost", event.target.value)} />
-                    </Field>
-                    <Field label="Inspection cost (EUR)" {...getFieldState("inspectionCost")}>
-                      <Input type="number" value={input.inspectionCost || ""} onChange={(event) => updateNumber("inspectionCost", event.target.value)} />
-                    </Field>
-                    <Field label="Broker fees (EUR)" {...getFieldState("brokerFees")}>
-                      <Input type="number" value={input.brokerFees || ""} onChange={(event) => updateNumber("brokerFees", event.target.value)} />
-                    </Field>
-                    <Field label="French market estimate (EUR)" {...getFieldState("frenchMarketEstimate")}>
-                      <Input type="number" value={input.frenchMarketEstimate || ""} onChange={(event) => updateNumber("frenchMarketEstimate", event.target.value)} />
-                    </Field>
-                  </div>
-                </details>
-              </div>
-              <details className="mt-6 rounded-[1.5rem] border border-slate-200 bg-white p-5 text-sm text-slate-600">
-                <summary className="cursor-pointer list-none font-semibold text-ink">Reliability notes</summary>
-                <p className="mt-3">When data is missing, the engine shows the assumption or keeps the uncertainty visible. It never silently invents VAT, malus, or market facts.</p>
+              <details className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
+                <summary className="cursor-pointer list-none font-semibold text-ink">Methodology notes</summary>
+                <p className="mt-3">Missing data stays visible as an assumption. VAT, malus, market confidence, and provider source are not silently invented.</p>
                 <p className="mt-2 text-xs text-slate-500">{LEGAL_REFERENCE_LABEL}.</p>
                 {visibleWarnings.length > 0 ? (
-                  <div className="mt-4 space-y-2 text-amber-900">
-                    {visibleWarnings.map((warning) => <p key={warning} className="rounded-2xl bg-amber-50 px-4 py-3">{warning}</p>)}
+                  <div className="mt-3 space-y-2 text-amber-900">
+                    {visibleWarnings.map((warning) => <p key={warning} className="rounded-xl bg-amber-50 px-3 py-2">{warning}</p>)}
                   </div>
                 ) : null}
               </details>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button type="button" onClick={handleSimulate} disabled={isRunning || isAnonymousLocked} className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-400">{isAnonymousLocked ? "Create account to continue" : isRunning ? "Computing..." : "Compute import decision"}</button>
-                <button type="button" onClick={handleLoadDemo} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400">Load demo</button>
-                <button type="button" onClick={handleReset} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400">Reset</button>
-              </div>
-            </section>
-            <div className="space-y-6">
-              <ResultPanel
-                result={result}
-                access={sessionEnvelope.access}
-                savedReport={savedReport}
-                cloudBusy={cloudBusy}
-                cloudMessage={cloudMessage}
-                onSaveSnapshot={handleSaveSnapshot}
-                onSaveCloud={handleSaveCloud}
-                onCreateShare={handleCreateShare}
-              />
-              <div id="account" className="scroll-mt-24">
-                <AccountPanel
-                  session={sessionEnvelope.session}
-                  access={sessionEnvelope.access}
-                  reportCount={sessionEnvelope.reportCount}
-                  email={authEmail}
-                  password={authPassword}
-                  authMode={authMode}
-                  busy={authBusy}
-                  status={authStatus}
-                  localHistoryCount={history.length}
-                  importBusy={importBusy}
-                  onAuthModeChange={setAuthMode}
-                  onEmailChange={setAuthEmail}
-                  onPasswordChange={setAuthPassword}
-                  onSubmit={handleAuthSubmit}
-                  onLogout={handleLogout}
-                  onImportLocal={handleImportLocal}
-                />
-              </div>
-              <div id="reports" className="scroll-mt-24 space-y-6">
-                {sessionEnvelope.session ? <CloudHistoryPanel reports={cloudReports} onOpen={handleOpenCloudReport} /> : null}
-                <HistoryPanel
-                  history={history}
-                  onSelect={(entry) => {
-                    setResult(entry);
-                    setInput(entry.input);
-                    setListingUrl(entry.input.listingUrl ?? "");
-                    setSavedReport(null);
-                    setStatus("Loaded a saved local decision.");
-                  }}
-                  onClear={() => {
-                    clearHistory();
-                    setHistory([]);
-                  }}
-                />
-              </div>
-              <details className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-soft">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-ink">Feedback</summary>
-                <div className="mt-4">
-                  <FeedbackWidget
-                    context={{ screen: "account_history", resultId: result?.id, reportId: savedReport?.id }}
-                    title="Help shape the beta"
-                    compact
-                  />
-                </div>
-              </details>
+            </details>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={handleSimulate} disabled={isRunning || isAnonymousLocked} className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-400">
+                {isAnonymousLocked ? "Create account" : isRunning ? "Computing..." : "Get verdict"}
+              </button>
+              <button type="button" onClick={handleReset} className="px-3 py-2 text-sm font-semibold text-slate-500 transition hover:text-ink">Reset</button>
             </div>
+          </section>
+
+          <div className="min-w-0 xl:sticky xl:top-20 xl:self-start">
+            <ResultPanel
+              result={result}
+              access={sessionEnvelope.access}
+              savedReport={savedReport}
+              cloudBusy={cloudBusy}
+              cloudMessage={cloudMessage}
+              onSaveSnapshot={handleSaveSnapshot}
+              onSaveCloud={handleSaveCloud}
+              onCreateShare={handleCreateShare}
+            />
           </div>
+        </div>
+
+        <div className="mx-auto mt-6 grid max-w-7xl gap-3 lg:grid-cols-3">
+          <details id="reports" className="scroll-mt-24 rounded-2xl bg-white p-5 shadow-soft ring-1 ring-slate-200/70">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-ink">Reports</summary>
+            <div className="mt-5 space-y-5">
+              {sessionEnvelope.session ? <CloudHistoryPanel reports={cloudReports} onOpen={handleOpenCloudReport} /> : null}
+              <HistoryPanel
+                history={history}
+                onSelect={(entry) => {
+                  setResult(entry);
+                  setInput(entry.input);
+                  setListingUrl(entry.input.listingUrl ?? "");
+                  setSavedReport(null);
+                  setStatus("Loaded a saved local decision.");
+                }}
+                onClear={() => {
+                  clearHistory();
+                  setHistory([]);
+                }}
+              />
+            </div>
+          </details>
+
+          <details id="account" className="scroll-mt-24 rounded-2xl bg-white p-5 shadow-soft ring-1 ring-slate-200/70">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-ink">Account</summary>
+            <div className="mt-5">
+              <AccountPanel
+                session={sessionEnvelope.session}
+                access={sessionEnvelope.access}
+                reportCount={sessionEnvelope.reportCount}
+                email={authEmail}
+                password={authPassword}
+                authMode={authMode}
+                busy={authBusy}
+                status={authStatus}
+                localHistoryCount={history.length}
+                importBusy={importBusy}
+                onAuthModeChange={setAuthMode}
+                onEmailChange={setAuthEmail}
+                onPasswordChange={setAuthPassword}
+                onSubmit={handleAuthSubmit}
+                onLogout={handleLogout}
+                onImportLocal={handleImportLocal}
+              />
+            </div>
+          </details>
+
+          <details className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-slate-200/70">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-ink">Feedback</summary>
+            <div className="mt-5">
+              <FeedbackWidget
+                context={{ screen: "account_history", resultId: result?.id, reportId: savedReport?.id }}
+                title="Help shape the beta"
+                compact
+              />
+            </div>
+          </details>
         </div>
       </section>
     </main>
