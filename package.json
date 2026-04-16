@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-next.ps1 dev",
-    "build": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-next.ps1 build",
-    "start": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-next.ps1 start",
-    "test": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-vitest.ps1 run"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "next": "16.2.3",
@@ -25,4 +25,3 @@
     "vitest": "2.1.8"
   }
 }
-
