@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "ImportScore Listing Importer",
+  "description": "Extract vehicle data from the current listing page and send it to ImportScore.",
+  "version": "0.1.0",
+  "homepage_url": "https://importscore.app",
+  "permissions": ["scripting", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Import listing into ImportScore"
+  }
+}

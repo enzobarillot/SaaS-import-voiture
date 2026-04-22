@@ -32,8 +32,10 @@ import { clearHistory, loadHistory, pushHistory } from "@/lib/storage/history";
 import { runSimulation } from "@/lib/simulation";
 import { consumeSimulationCredit, getUsageState } from "@/lib/usage";
 import type {
+  ExtensionExtractionPayload,
   InputEvidence,
   InputMode,
+  ListingPlatform,
   ParserStatus,
   ReportDocument,
   SavedReportSummary,
@@ -121,6 +123,123 @@ function formatFieldList(fields: VehicleFieldKey[]): string {
 function getInferredFields(parserResult: UrlParseResult | null): VehicleFieldKey[] {
   const fields = parserResult?.inferredFields ?? [];
   return parserResult?.partialInput.countryOfOrigin ? Array.from(new Set([...fields, "countryOfOrigin"])) : fields;
+}
+
+const EXTENSION_PAYLOAD_HASH_KEY = "extensionPayload";
+const EXTENSION_FIELD_KEYS: VehicleFieldKey[] = [
+  "brand",
+  "model",
+  "trim",
+  "purchasePrice",
+  "year",
+  "firstRegistrationDate",
+  "mileage",
+  "fuelType",
+  "transmission",
+  "horsepower",
+  "fiscalPower",
+  "co2Emissions",
+  "sellerType",
+  "vatStatus",
+  "countryOfOrigin",
+  "listingUrl"
+];
+
+function decodeExtensionPayload(encoded: string): ExtensionExtractionPayload | null {
+  try {
+    const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as ExtensionExtractionPayload;
+    if (!payload || typeof payload !== "object" || !payload.confirmedFields || !payload.inferredFields) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function readExtensionPayloadFromHash(): ExtensionExtractionPayload | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  const encoded = new URLSearchParams(hash).get(EXTENSION_PAYLOAD_HASH_KEY);
+  return encoded ? decodeExtensionPayload(encoded) : null;
+}
+
+function platformFromExtensionSource(source: string): ListingPlatform {
+  const normalized = source.toLowerCase();
+  if (normalized.includes("mobile")) return "mobile.de";
+  if (normalized.includes("autoscout")) return "autoscout24";
+  if (normalized.includes("leboncoin")) return "leboncoin";
+  if (normalized.includes("lacentrale")) return "lacentrale";
+  return "unknown";
+}
+
+function filterExtensionFields(fields: Partial<VehicleInput>): Partial<VehicleInput> {
+  const filtered: Partial<VehicleInput> = {};
+  for (const key of EXTENSION_FIELD_KEYS) {
+    const value = fields[key];
+    if (valueExists(value)) {
+      (filtered as Record<VehicleFieldKey, unknown>)[key] = value;
+    }
+  }
+  return filtered;
+}
+
+function extensionStatusToParserStatus(status: ExtensionExtractionPayload["status"]): ParserStatus {
+  if (status === "unsupported_source") return "unsupported";
+  return status;
+}
+
+function extensionPayloadToParserResult(payload: ExtensionExtractionPayload): UrlParseResult {
+  const confirmedFields = filterExtensionFields(payload.confirmedFields);
+  const inferredFields = filterExtensionFields(payload.inferredFields);
+  const confirmedKeys = new Set(Object.keys(confirmedFields) as VehicleFieldKey[]);
+  const extractedFieldKeys = (Object.keys(confirmedFields) as VehicleFieldKey[]).filter(
+    (field) => field !== "countryOfOrigin" && field !== "listingUrl"
+  );
+  const inferredFieldKeys = (Object.keys(inferredFields) as VehicleFieldKey[]).filter(
+    (field) => !confirmedKeys.has(field) && field !== "listingUrl"
+  );
+  const partialInput = {
+    ...inferredFields,
+    ...confirmedFields
+  };
+  const source = extractedFieldKeys.length > 0 && inferredFieldKeys.length > 0
+    ? "mixed"
+    : extractedFieldKeys.length > 0
+      ? "html_metadata"
+      : inferredFieldKeys.length > 0
+        ? "url_tokens"
+        : "none";
+  const status = extensionStatusToParserStatus(payload.status);
+
+  return {
+    status,
+    platform: platformFromExtensionSource(payload.source),
+    partialInput,
+    assumptions: [
+      "Imported from the Chrome extension using the already-open listing page.",
+      ...(inferredFieldKeys.length > 0 ? ["Fields inferred from the page title or URL slug are weak signals and should be reviewed."] : []),
+      ...(payload.diagnostics.messages ?? [])
+    ],
+    summary:
+      status === "success"
+        ? "Chrome extension extracted usable listing data from the open page."
+        : status === "partial"
+          ? "Chrome extension prefilled available fields from the open page. Review inferred values."
+          : status === "unsupported"
+            ? "This listing source is not supported by the Chrome extension."
+            : "Chrome extension could not extract enough usable listing data.",
+    extractedFields: extractedFieldKeys,
+    inferredFields: inferredFieldKeys,
+    missingFields: payload.missingCriticalFields,
+    recommendedFields: [],
+    source,
+    normalizedUrl: partialInput.listingUrl,
+    diagnostics: [
+      `extension:domain:${payload.diagnostics.domain}`,
+      `extension:title:${payload.diagnostics.title}`,
+      `extension:confirmed_fields:${payload.diagnostics.extractedFieldCount}`
+    ]
+  };
 }
 
 export function ImportMvp() {
@@ -330,6 +449,20 @@ export function ImportMvp() {
     setStatus(getParserStatusMessage(parsed));
     setValidationErrors([]);
   };
+
+  useEffect(() => {
+    const extensionPayload = readExtensionPayloadFromHash();
+    if (!extensionPayload) return;
+
+    const parsed = extensionPayloadToParserResult(extensionPayload);
+    setMode("url");
+    setResult(null);
+    setSavedReport(null);
+    setUserSuppliedFields([]);
+    applyParseResult(parsed, parsed.normalizedUrl ?? "");
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#simulator`);
+    window.setTimeout(scrollToTry, 0);
+  }, []);
 
   const handleParseUrl = async () => {
     const trimmedUrl = listingUrl.trim();

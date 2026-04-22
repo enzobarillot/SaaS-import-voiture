@@ -196,6 +196,22 @@ export interface UrlParseResult {
   diagnostics?: string[];
 }
 
+export type ExtensionExtractionStatus = "success" | "partial" | "failed" | "unsupported_source";
+
+export interface ExtensionExtractionPayload {
+  source: string;
+  status: ExtensionExtractionStatus;
+  confirmedFields: Partial<VehicleInput>;
+  inferredFields: Partial<VehicleInput>;
+  missingCriticalFields: VehicleFieldKey[];
+  diagnostics: {
+    domain: string;
+    title: string;
+    extractedFieldCount: number;
+    messages?: string[];
+  };
+}
+
 export interface DealSummary {
   headline: string;
   explanation: string;
