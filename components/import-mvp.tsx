@@ -119,7 +119,8 @@ function formatFieldList(fields: VehicleFieldKey[]): string {
 }
 
 function getInferredFields(parserResult: UrlParseResult | null): VehicleFieldKey[] {
-  return parserResult?.partialInput.countryOfOrigin ? ["countryOfOrigin"] : [];
+  const fields = parserResult?.inferredFields ?? [];
+  return parserResult?.partialInput.countryOfOrigin ? Array.from(new Set([...fields, "countryOfOrigin"])) : fields;
 }
 
 export function ImportMvp() {

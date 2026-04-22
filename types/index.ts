@@ -188,10 +188,12 @@ export interface UrlParseResult {
   assumptions: string[];
   summary: string;
   extractedFields: VehicleFieldKey[];
+  inferredFields?: VehicleFieldKey[];
   missingFields: VehicleFieldKey[];
   recommendedFields: VehicleFieldKey[];
   source: ParserSource;
   normalizedUrl?: string;
+  diagnostics?: string[];
 }
 
 export interface DealSummary {
